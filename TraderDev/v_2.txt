@@ -1,0 +1,308 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Windows.Forms;
+using System.Windows.Forms.DataVisualization.Charting;
+using Newtonsoft.Json;
+
+namespace TraderDev
+{
+    public partial class Form1 : Form
+    {
+        private Timer priceUpdateTimer;
+        private Random random = new Random();
+        private double initialPrice = 100.0;
+        private string savePath = "./historic_prices.json";
+
+        private List<PricePoint> priceHistoryAll = new List<PricePoint>();
+        private int currentViewLength = 10;
+
+        // Variables for realistic price simulation
+        private double velocity = 0;
+        private const double randomFactor = 0.5; // Random influence strength
+        private const double decay = 0.9;       // Velocity decay (momentum)
+        private const double timeStep = 1.0;    // Time step multiplier
+
+        // Session tracking
+        private double sessionStartPrice;
+
+        // Trading variables
+        private double cashBalance = 100000.0;  // Start with $100,000 cash
+        private int stockHoldings = 0;
+
+        public Form1()
+        {
+            InitializeComponent();
+            InitializeChart();
+            LoadPriceHistory();
+
+            sessionStartPrice = priceHistoryAll.Last().Price;
+
+            InitializeTimer();
+            UpdateTradingLabels();
+        }
+
+        private void InitializeChart()
+        {
+            chart1.Series.Clear();
+
+            Series series = new Series("PriceSeries")
+            {
+                ChartType = SeriesChartType.Spline
+            };
+
+            chart1.Series.Add(series);
+            chart1.ChartAreas[0].AxisX.Title = "Time";
+            chart1.ChartAreas[0].AxisY.Title = "Price";
+        }
+
+        private void InitializeTimer()
+        {
+            priceUpdateTimer = new Timer();
+            priceUpdateTimer.Interval = 100;
+            priceUpdateTimer.Tick += PriceUpdateTimer_Tick;
+            priceUpdateTimer.Start();
+        }
+
+        private void PriceUpdateTimer_Tick(object sender, EventArgs e)
+        {
+            double lastPrice = priceHistoryAll.Count > 0 ? priceHistoryAll[priceHistoryAll.Count - 1].Price : initialPrice;
+            double newPrice = GenerateRealisticPrice(lastPrice);
+            bool isUp = newPrice >= lastPrice;
+
+            priceHistoryAll.Add(new PricePoint { Price = newPrice, IsUp = isUp });
+
+            SavePriceHistory();
+            UpdateChart();
+            UpdateLabels();
+            UpdateTradingLabels();
+        }
+
+        private double GenerateRealisticPrice(double lastPrice)
+        {
+            velocity *= decay;
+
+            double randomInfluence = (random.NextDouble() * 2 - 1) * randomFactor;
+            velocity += randomInfluence * timeStep;
+
+            double newPrice = lastPrice + velocity;
+            if (newPrice < 0.1) newPrice = 0.1;
+
+            return newPrice;
+        }
+
+        private void UpdateChart()
+        {
+            List<PricePoint> viewData = priceHistoryAll.Skip(Math.Max(0, priceHistoryAll.Count - currentViewLength)).ToList();
+
+            var series = chart1.Series["PriceSeries"];
+            series.Points.Clear();
+
+            for (int i = 0; i < viewData.Count; i++)
+            {
+                int index = series.Points.AddXY(i + 1, viewData[i].Price);
+                series.Points[index].Color = viewData[i].IsUp ? Color.Green : Color.Red;
+            }
+        }
+
+        private void SavePriceHistory()
+        {
+            try
+            {
+                File.WriteAllText(savePath, JsonConvert.SerializeObject(priceHistoryAll, Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to save price data: " + ex.Message);
+            }
+        }
+
+        private void LoadPriceHistory()
+        {
+            try
+            {
+                if (File.Exists(savePath))
+                {
+                    string json = File.ReadAllText(savePath);
+                    priceHistoryAll = JsonConvert.DeserializeObject<List<PricePoint>>(json);
+                }
+
+                if (priceHistoryAll == null || priceHistoryAll.Count == 0)
+                {
+                    priceHistoryAll = new List<PricePoint> { new PricePoint { Price = initialPrice, IsUp = true } };
+                }
+            }
+            catch
+            {
+                priceHistoryAll = new List<PricePoint> { new PricePoint { Price = initialPrice, IsUp = true } };
+            }
+        }
+
+        private void UpdateLabels()
+        {
+            if (priceHistoryAll.Count == 0) return;
+
+            var currentPrice = priceHistoryAll.Last().Price;
+            var firstPrice = priceHistoryAll[0].Price;
+
+            lbl_current_price.Text = $"{currentPrice:F2}";
+
+            double percentChange = ((currentPrice - firstPrice) / firstPrice) * 100.0;
+            lbl_analytics_from_last_10th_price.Text = $"Since start: {percentChange:+0.00;-0.00;0.00}%";
+
+            if (currentPrice > firstPrice)
+            {
+                lbl_current_price.ForeColor = Color.Green;
+                lbl_analytics_from_last_10th_price.ForeColor = Color.Green;
+            }
+            else if (currentPrice < firstPrice)
+            {
+                lbl_current_price.ForeColor = Color.Red;
+                lbl_analytics_from_last_10th_price.ForeColor = Color.Red;
+            }
+            else
+            {
+                lbl_current_price.ForeColor = Color.Black;
+                lbl_analytics_from_last_10th_price.ForeColor = Color.Black;
+            }
+
+            double priceDiffFromSessionStart = currentPrice - sessionStartPrice;
+            string sign = priceDiffFromSessionStart >= 0 ? "+" : "-";
+            lbl_price_change_from_the_start_of_session.Text = $"Session Change: {sign}{Math.Abs(priceDiffFromSessionStart):F2}";
+
+            if (priceDiffFromSessionStart > 0)
+                lbl_price_change_from_the_start_of_session.ForeColor = Color.Green;
+            else if (priceDiffFromSessionStart < 0)
+                lbl_price_change_from_the_start_of_session.ForeColor = Color.Red;
+            else
+                lbl_price_change_from_the_start_of_session.ForeColor = Color.Black;
+        }
+
+        private void UpdateTradingLabels()
+        {
+            lbl_cash_balance.Text = $"Cash: ${cashBalance:F2}";
+            lbl_stock_holdings.Text = $"Stocks: {stockHoldings}";
+        }
+
+        // Helper method to get current price
+        private double GetCurrentPrice()
+        {
+            return priceHistoryAll.Count > 0 ? priceHistoryAll.Last().Price : initialPrice;
+        }
+
+        // Buy stock method
+        private void BuyStock(int quantity)
+        {
+            double price = GetCurrentPrice();
+            double cost = price * quantity;
+
+            if (cost > cashBalance)
+            {
+                MessageBox.Show($"Not enough cash to buy {quantity} stocks.");
+                return;
+            }
+
+            cashBalance -= cost;
+            stockHoldings += quantity;
+            UpdateTradingLabels();
+        }
+
+        // Sell stock method
+        private void SellStock(int quantity)
+        {
+            if (quantity > stockHoldings)
+            {
+                MessageBox.Show($"Not enough stocks to sell {quantity}.");
+                return;
+            }
+
+            double price = GetCurrentPrice();
+            double revenue = price * quantity;
+
+            cashBalance += revenue;
+            stockHoldings -= quantity;
+            UpdateTradingLabels();
+        }
+
+        // Button click handlers for buy and sell
+
+        private void btn_but_1_Click(object sender, EventArgs e)
+        {
+            BuyStock(1);
+        }
+
+        private void btn_sell_1_Click(object sender, EventArgs e)
+        {
+            SellStock(1);
+        }
+
+        private void btn_but_10_Click(object sender, EventArgs e)
+        {
+            BuyStock(10);
+        }
+
+        private void btn_sell_10_Click(object sender, EventArgs e)
+        {
+            SellStock(10);
+        }
+
+        private void btn_but_100_Click(object sender, EventArgs e)
+        {
+            BuyStock(100);
+        }
+
+        private void btn_sell_100_Click(object sender, EventArgs e)
+        {
+            SellStock(100);
+        }
+
+        private void btn_but_1000_Click(object sender, EventArgs e)
+        {
+            BuyStock(1000);
+        }
+
+        private void btn_sell_1000_Click(object sender, EventArgs e)
+        {
+            SellStock(1000);
+        }
+
+        private void btn_but_10000_Click(object sender, EventArgs e)
+        {
+            BuyStock(10000);
+        }
+
+        private void btn_sell_10000_Click(object sender, EventArgs e)
+        {
+            SellStock(10000);
+        }
+
+        // Existing view-length button handlers...
+
+        private void btn_show_last_10_prices_Click(object sender, EventArgs e) => SetViewLength(10);
+        private void btn_show_last_30_prices_Click(object sender, EventArgs e) => SetViewLength(30);
+        private void btn_show_last_100_prices_Click(object sender, EventArgs e) => SetViewLength(100);
+        private void btn_show_last_500_prices_Click(object sender, EventArgs e) => SetViewLength(500);
+        private void btn_show_last_1000_prices_Click(object sender, EventArgs e) => SetViewLength(1000);
+        private void btn_show_last_2000_prices_Click(object sender, EventArgs e) => SetViewLength(2000);
+        private void btn_show_last_10000_prices_Click(object sender, EventArgs e) => SetViewLength(10000);
+
+        private void SetViewLength(int length)
+        {
+            currentViewLength = length;
+            UpdateChart();
+        }
+
+        private void chart1_Click(object sender, EventArgs e)
+        {
+            // Optional: Add zoom or tooltip behavior here
+        }
+    }
+
+    public class PricePoint
+    {
+        public double Price { get; set; }
+        public bool IsUp { get; set; }
+    }
+}

@@ -1,0 +1,143 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Windows.Forms;
+using System.Windows.Forms.DataVisualization.Charting;
+using Newtonsoft.Json;
+
+namespace TraderDev
+{
+    public partial class Form1 : Form
+    {
+        private Timer priceUpdateTimer;
+        private Random random = new Random();
+        private double initialPrice = 100.0;
+        private string savePath = "./historic_prices.json";
+
+        private List<PricePoint> priceHistoryAll = new List<PricePoint>();
+        private int currentViewLength = 10;
+
+        public Form1()
+        {
+            InitializeComponent();
+            InitializeChart();
+            LoadPriceHistory();
+            InitializeTimer();
+        }
+
+        private void InitializeChart()
+        {
+            chart1.Series.Clear();
+
+            Series series = new Series("PriceSeries")
+            {
+                ChartType = SeriesChartType.Spline
+            };
+
+            chart1.Series.Add(series);
+            chart1.ChartAreas[0].AxisX.Title = "Time";
+            chart1.ChartAreas[0].AxisY.Title = "Price";
+        }
+
+        private void InitializeTimer()
+        {
+            priceUpdateTimer = new Timer();
+            priceUpdateTimer.Interval = 1;
+            priceUpdateTimer.Tick += PriceUpdateTimer_Tick;
+            priceUpdateTimer.Start();
+        }
+
+        private void PriceUpdateTimer_Tick(object sender, EventArgs e)
+        {
+            double lastPrice = priceHistoryAll.Count > 0 ? priceHistoryAll[priceHistoryAll.Count - 1].Price : initialPrice;
+            double newPrice = GenerateNewPrice(lastPrice);
+            bool isUp = newPrice >= lastPrice;
+
+            priceHistoryAll.Add(new PricePoint { Price = newPrice, IsUp = isUp });
+
+            SavePriceHistory();
+            UpdateChart();
+        }
+
+        private double GenerateNewPrice(double lastPrice)
+        {
+            double change = lastPrice * 0.2;
+            return random.NextDouble() * (2 * change) + (lastPrice - change);
+        }
+
+        private void UpdateChart()
+        {
+            List<PricePoint> viewData = priceHistoryAll.Skip(Math.Max(0, priceHistoryAll.Count - currentViewLength)).ToList();
+
+            var series = chart1.Series["PriceSeries"];
+            series.Points.Clear();
+
+            for (int i = 0; i < viewData.Count; i++)
+            {
+                int index = series.Points.AddXY(i + 1, viewData[i].Price);
+                series.Points[index].Color = viewData[i].IsUp ? Color.Green : Color.Red;
+            }
+        }
+
+        private void SavePriceHistory()
+        {
+            try
+            {
+                File.WriteAllText(savePath, JsonConvert.SerializeObject(priceHistoryAll, Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to save price data: " + ex.Message);
+            }
+        }
+
+        private void LoadPriceHistory()
+        {
+            try
+            {
+                if (File.Exists(savePath))
+                {
+                    string json = File.ReadAllText(savePath);
+                    priceHistoryAll = JsonConvert.DeserializeObject<List<PricePoint>>(json);
+                }
+
+                if (priceHistoryAll == null || priceHistoryAll.Count == 0)
+                {
+                    priceHistoryAll = new List<PricePoint> { new PricePoint { Price = initialPrice, IsUp = true } };
+                }
+            }
+            catch
+            {
+                priceHistoryAll = new List<PricePoint> { new PricePoint { Price = initialPrice, IsUp = true } };
+            }
+        }
+
+        // Button handlers
+        private void btn_show_last_10_prices_Click(object sender, EventArgs e) => SetViewLength(10);
+        private void btn_show_last_30_prices_Click(object sender, EventArgs e) => SetViewLength(30);
+        private void btn_show_last_100_prices_Click(object sender, EventArgs e) => SetViewLength(100);
+        private void btn_show_last_500_prices_Click(object sender, EventArgs e) => SetViewLength(500);
+        private void btn_show_last_1000_prices_Click(object sender, EventArgs e) => SetViewLength(1000);
+        private void btn_show_last_2000_prices_Click(object sender, EventArgs e) => SetViewLength(2000);
+        private void btn_show_last_10000_prices_Click(object sender, EventArgs e) => SetViewLength(10000);
+
+        private void SetViewLength(int length)
+        {
+            currentViewLength = length;
+            UpdateChart();
+        }
+
+        private void chart1_Click(object sender, EventArgs e)
+        {
+            // Optional: Add zoom or tooltip behavior here
+        }
+    }
+
+    public class PricePoint
+    {
+        public double Price { get; set; }
+        public bool IsUp { get; set; }
+    }
+}

@@ -1,0 +1,14 @@
+D:\cat-A\TraderDev\TraderDev\bin\Debug\TraderDev.exe.config
+D:\cat-A\TraderDev\TraderDev\bin\Debug\TraderDev.exe
+D:\cat-A\TraderDev\TraderDev\bin\Debug\TraderDev.pdb
+D:\cat-A\TraderDev\TraderDev\obj\Debug\TraderDev.csproj.AssemblyReference.cache
+D:\cat-A\TraderDev\TraderDev\obj\Debug\TraderDev.Form1.resources
+D:\cat-A\TraderDev\TraderDev\obj\Debug\TraderDev.Properties.Resources.resources
+D:\cat-A\TraderDev\TraderDev\obj\Debug\TraderDev.csproj.GenerateResource.cache
+D:\cat-A\TraderDev\TraderDev\obj\Debug\TraderDev.csproj.CoreCompileInputs.cache
+D:\cat-A\TraderDev\TraderDev\obj\Debug\TraderDev.exe
+D:\cat-A\TraderDev\TraderDev\obj\Debug\TraderDev.pdb
+D:\cat-A\TraderDev\TraderDev\obj\Debug\TraderDev.exe.config
+D:\cat-A\TraderDev\TraderDev\bin\Debug\Newtonsoft.Json.dll
+D:\cat-A\TraderDev\TraderDev\bin\Debug\Newtonsoft.Json.xml
+D:\cat-A\TraderDev\TraderDev\obj\Debug\TraderDev.csproj.Up2Date
